@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      balancer_db:
+        condition: service_healthy
+    environment:
+      BALANCER_HOST: 0.0.0.0
+      BALANCER_SERVICE_DB_HOST: balancer-db
+      BALANCER_SERVICE_DB_PORT: 5432
+      BALANCER_SERVICE_DB_USER: balancer
+      BALANCER_SERVICE_DB_PASS: balancer
+      BALANCER_SERVICE_DB_BASE: balancer
+
+  balancer_db:
+    image: postgres:17
+    hostname: balancer-db
+    environment:
+      POSTGRES_PASSWORD: "balancer"
+      POSTGRES_USER: "balancer"
+      POSTGRES_DB: "balancer"
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: pg_isready -U balancer
+      interval: 2s
+      timeout: 3s
+      retries: 40
+
+  migrator:
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
+    restart: "no"
+    command: aerich upgrade
+    environment:
+      BALANCER_SERVICE_DB_HOST: balancer-db
+      BALANCER_SERVICE_DB_PORT: 5432
+      BALANCER_SERVICE_DB_USER: balancer
+      BALANCER_SERVICE_DB_PASS: balancer
+      BALANCER_SERVICE_DB_BASE: balancer
+    depends_on:
+      balancer_db:
+        condition: service_healthy
+
+volumes:
+  db-data:
+    name: passport-db-data
